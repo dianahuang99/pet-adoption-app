@@ -1,0 +1,273 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-sm-9">
+        <div class="row">
+
+            <form class="input-group" id="search-form" action="/animals/1">
+                <input style='border-radius: 25px 0 0 25px;' name="name" class="form-control" id="search_for"
+                    placeholder="Search by name">
+                <button id="thisButton" class="btn btn-outline-secondary" style='height: 38px' type="submit"
+                    onClick="javascript:change();">Search!</button>
+            </form>
+
+
+            <form action="/animals/1" method='GET' style='margin-top:"-10px"'>
+                <select class="form-select form-control" aria-label="Default select example" name='type'
+                    onchange='if(this.value != 0) { this.form.submit(); }'>
+                    <option value='0'>Search by species</option>
+                    {% for type in types %}
+                    <option value="{{ type.name }}">{{ type.name }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+
+            <form action="/animals/1" method='GET'>
+                <select class="form-select form-control" aria-label="Default select example" name='gender'
+                    onchange='if(this.value != 0) { this.form.submit(); }'>
+                    <option value='0'>Search by gender</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                    <option value="unknown">unknown</option>
+                </select>
+            </form>
+
+
+            {% if animals|length == 0 %}
+            <h3 style='margin-top: 20px'>Sorry, no animals found</h3>
+            {% else %}
+
+            {% for animal in animals %}
+            <div class="col-lg-4 col-md-6 col-12">
+                <div class="card user-card">
+                    <div class="card-inner">
+                        <div class="image-wrapper">
+                            {% if animal.photos|length != 0 %}
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Solid_white.svg/2048px-Solid_white.svg.png"
+                                alt="" class="card-hero">
+                            {%else%}
+                            <img src="https://colorfully.eu/wp-content/uploads/2013/05/sweet-little-dog-facebook-c.jpg"
+                                alt="Image for {{ animal.name }}" class="card-hero">
+                            {%endif%}
+                        </div>
+                        <div class="card-contents">
+                            <a href="/animals/details/{{ animal.id }}" class="card-link">
+                                {% if animal.photos|length != 0 %}
+                                <img src="{{ animal.photos[0].small }}" alt="Image for {{ animal.name }}"
+                                    class="card-image">
+                                {%else%}
+                                <img src="https://img.freepik.com/free-vector/cute-dog-sitting-cartoon-vector-icon-illustration-animal-nature-icon-concept-isolated-premium-vector-flat-cartoon-style_138676-3671.jpg"
+                                    alt="Image for {{ animal.name }}" class="card-image">
+
+                                {%endif%}
+
+                                <p class='animal-name'>{{ animal.name }}</p>
+
+                            </a>
+                        </div>
+
+
+                        {% if animal.description %}
+                        <p class="card-bio">{{animal.description}}</p>
+                        {%endif%}
+                        <form method="POST" action="/animal/save/{{ animal.id }}" id="messages-form">
+                            <button class="
+                            btn 
+                            btn-sm 
+                            {{'btn-danger' if animal.id in animal_likes else 'btn-secondary'}}"> <i
+                                    class="fa fa-heart"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            {%if page_num < 3%}
+            {%if name%}
+            <form class="form-inline" id="search-form" action="/animals/{{page_num}}">
+                <input type="hidden" name="name" class="form-control" id="search_for" value={{name}}>
+                <div class='row justify-content-center' style='margin-top: 20px'>
+                    <div class='col-lg-6 col-md-12 col-12 btn btn-primary btn-block'>
+                        <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                            type="submit" onClick="javascript:change();">Next</button>
+                    </div>
+                </div>
+            </form>
+            {%elif type%}
+            <form class="form-inline" id="search-form" action="/animals/{{page_num}}">
+                <input type="hidden" name="type" class="form-control" id="search_for" value={{type}}>
+                <div class='row justify-content-center' style='margin-top: 20px'>
+                    <div class='col-lg-6 col-md-12 col-12 btn btn-primary btn-block'>
+                        <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                            type="submit" onClick="javascript:change();">Next</button>
+                    </div>
+                </div>
+            </form>
+            {%elif gender%}
+            <form class="form-inline" id="search-form" action="/animals/{{page_num}}">
+                <input type="hidden" name="gender" class="form-control" id="search_for" value={{gender}}>
+                <div class='row justify-content-center' style='margin-top: 20px'>
+                    <div class='col-lg-6 col-md-12 col-12 btn btn-primary btn-block'>
+                        <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                            type="submit" onClick="javascript:change();">Next</button>
+                    </div>
+                </div>
+            </form>
+            {%else%}
+            <div class='row justify-content-center' style='margin-top: 20px'>
+                <div class='col-lg-6 col-md-12 col-12 btn btn-primary btn-block'>
+                    <a href="/animals/{{page_num}}" class="btn btn-primary btn-block" style='display:block'>Next</a>
+                </div>
+            </div>
+            {%endif%}
+            {%else%}
+            {%if name%}
+            <div class='card-contents' style='margin-top: 20px'>
+                <div class='col-lg-4 col-md-6 col-12 btn btn-primary btn-block'>
+                    <form class="form-inline" id="search-form" action="/animals/{{page_num-2}}">
+                        <input type="hidden" name="name" class="form-control" id="search_for" value={{name}}>
+                        <div class='row justify-content-center'>
+                            <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                                type="submit" onClick="javascript:change();">Previous</button>
+                        </div>
+                    </form>
+
+
+                </div>
+
+
+
+
+
+
+                <div class='col-lg-4 col-md-6 col-12 btn btn-primary btn-block'>
+                    <form class="form-inline" id="search-form" action="/animals/{{page_num}}">
+                        <input type="hidden" name="name" class="form-control" id="search_for" value={{name}}>
+                        <div class='row justify-content-center'>
+                            <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                                type="submit" onClick="javascript:change();">Next</button>
+                        </div>
+                    </form>
+
+
+                </div>
+
+
+
+            </div>
+
+            {%elif type%}
+            <div class='card-contents' style='margin-top: 20px'>
+                <div class='col-lg-4 col-md-6 col-12 btn btn-primary btn-block'>
+                    <form class="form-inline" id="search-form" action="/animals/{{page_num-2}}">
+                        <input type="hidden" name="type" class="form-control" id="search_for" value={{type}}>
+                        <div class='row justify-content-center'>
+                            <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                                type="submit" onClick="javascript:change();">Previous</button>
+                        </div>
+                    </form>
+
+
+                </div>
+
+
+
+
+
+
+                <div class='col-lg-4 col-md-6 col-12 btn btn-primary btn-block'>
+                    <form class="form-inline" id="search-form" action="/animals/{{page_num}}">
+                        <input type="hidden" name="type" class="form-control" id="search_for" value={{type}}>
+                        <div class='row justify-content-center'>
+                            <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                                type="submit" onClick="javascript:change();">Next</button>
+                        </div>
+                    </form>
+
+
+                </div>
+
+
+
+            </div>
+            {%elif gender%}
+            <div class='card-contents' style='margin-top: 20px'>
+                <div class='col-lg-4 col-md-6 col-12 btn btn-primary btn-block'>
+                    <form class="form-inline" id="search-form" action="/animals/{{page_num-2}}">
+                        <input type="hidden" name="gender" class="form-control" id="search_for" value={{gender}}>
+                        <div class='row justify-content-center'>
+                            <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                                type="submit" onClick="javascript:change();">Previous</button>
+                        </div>
+                    </form>
+
+
+                </div>
+
+
+
+
+
+
+                <div class='col-lg-4 col-md-6 col-12 btn btn-primary btn-block'>
+                    <form class="form-inline" id="search-form" action="/animals/{{page_num}}">
+                        <input type="hidden" name="gender" class="form-control" id="search_for" value={{gender}}>
+                        <div class='row justify-content-center'>
+                            <button id="thisButton" class="col-lg-12 btn btn-primary btn-block" style='display:block'
+                                type="submit" onClick="javascript:change();">Next</button>
+                        </div>
+                    </form>
+
+
+                </div>
+
+
+
+            </div>
+
+
+            {%else%}
+
+
+            <div class='card-contents' style='margin-top: 20px'>
+                <div class='col-lg-4 col-md-6 col-12 btn btn-primary btn-block'>
+
+                    <a href="/animals/{{page_num-2}}" class="btn btn-primary btn-block"
+                        style='display:block'>Previous</a>
+
+                </div>
+                <div class='col-lg-4 col-md-6 col-12 btn btn-primary btn-block'>
+                    <a href="/animals/{{page_num}}" class="btn btn-primary btn-block" style='display:block'>Next</a>
+                </div>
+
+            </div>
+            {%endif%}
+            {%endif%}
+
+
+
+        </div>
+    </div>
+
+
+
+</div>
+{% endif %}
+
+<script>
+    function change() {
+        let e = document.getElementById("thisButton");
+        if (e.innerHTML == "Search!") {
+            e.innerHTML = "Searching ...";
+            e.classList.remove("btn-primary");
+            e.classList.add("btn-info");
+        } else {
+            e.innerHTML = "Search!";
+            e.classList.remove("btn-info");
+            e.classList.add("btn-primary");
+        }
+    }
+</script>
+{% endblock %}

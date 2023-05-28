@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-sm-9">
+        <div class="row">
+            <div class="col-lg-12 col-md-12 col-12">
+                <div class="card user-card">
+                    <div class="card-inner text-center">
+                        {% if animal.photos|length != 0 %}
+                        <img src="{{animal.photos[0].medium}}" alt="" style="width: 286px; height: auto; margin: auto">
+                        {%else%}
+                        <img src="https://img.freepik.com/free-vector/cute-dog-sitting-cartoon-vector-icon-illustration-animal-nature-icon-concept-isolated-premium-vector-flat-cartoon-style_138676-3671.jpg"
+                            alt="" style="width: 200px; height: auto; margin: auto">
+
+                        {%endif%}
+
+                        <h2>Hi, I am {{animal.name}}! Nice to meet you.</h2>
+
+                        <ul style="list-style: none; padding-left:0">
+                            <li>Species: {{animal.species}}</li>
+                            {%if animal.status%}
+                            <li>Status: {{animal.status}}</li>
+                            {%endif%}
+                            {%if animal.gender%}
+                            <li>Gender: {{animal.gender}}</li>
+                            {%endif%}
+                            {%if animal.age%}
+                            <li>Age: {{animal.age}}</li>
+                            {%endif%}
+
+                        </ul>
+
+
+                        <h4><u>Contact Information</u></h4>
+
+                        <ul style="list-style: none; padding-left:0">
+                            {%if animal.contact.email%}
+                            <li>Email: {{animal.contact.email}}</li>
+                            {%endif%}
+                            {%if animal.contact.phone%}
+                            <li>Phone: {{animal.contact.phone}}</li>
+                            {%endif%}
+                            {%if animal.contact.address%}
+                            <li>Address: {%if animal.contact.address.address1%}
+                                {{animal.contact.address.address1}}{%endif%} {%if animal.contact.address.address2%}
+                                {{animal.contact.address.address2}}{%endif%}{%if animal.contact.address.city%}
+                                {{animal.contact.address.city}},{%endif%}{%if animal.contact.address.state%}
+                                {{animal.contact.address.state}}{%endif%}{%if animal.contact.address.postcode%}
+                                {{animal.contact.address.postcode}}{%endif%}</li>
+                            {%endif%}
+
+
+                        </ul>
+                        {%if animal.url%}
+                        <a href={{animal.url}}>Learn more about {{animal.name}}!</a>
+                        {%endif%}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

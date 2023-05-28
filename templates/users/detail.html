@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="warbler-hero" class="full-width">
+  <div class="full-width" style='height: 96px' alt=""></div>
+</div>
+
+<div class="row full-width">
+  <div class="container">
+    <div class="row justify-content-end">
+      <div class="col-9">
+        <ul class="user-stats nav nav-pills">
+          <li class="stat">
+            <p class="small">Saved Organizations</p>
+            <h4><a href="/users/{{ user.id }}/organizations">{{ user.org_likes|length }}</a></h4>
+          </li>
+          <li class="stat">
+            <p class="small">Saved Animals</p>
+            <h4><a href="/users/{{ user.id }}/animals">{{ user.animal_likes|length }}</a></h4>
+          </li>
+          <div class="ml-auto">
+            {% if g.user.id == user.id %}
+            <a href="/users/profile" class="btn btn-outline-secondary">Edit Profile</a>
+            <form method="POST" action="/users/delete" class="form-inline">
+              <button class="btn btn-outline-danger ml-2">Delete Profile</button>
+            </form>
+            {% elif g.user %}
+            {% if g.user.is_following(user) %}
+            <form method="POST" action="/users/stop-following/{{ user.id }}">
+              <button class="btn btn-primary">Unfollow</button>
+            </form>
+            {% else %}
+            <form method="POST" action="/users/follow/{{ user.id }}">
+              <button class="btn btn-outline-primary">Follow</button>
+            </form>
+            {% endif %}
+            {% endif %}
+          </div>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-sm-3">
+    <h4 id="sidebar-message">Hi <b>{{ user.username }}</b>. This page is where you can find your saved
+      organizations and animals.</h4>
+  </div>
+
+  {% block user_details %}
+  {% endblock %}
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-sm-9">
+        <div class="row">
+            <div class="col-lg-4 col-md-6 col-12">
+                <div class="card user-card">
+                    <div class="card-inner">
+                        <div class="image-wrapper">
+                            {% if org.photos|length != 0 %}
+                            <img src="{{ org.photos[0].medium }}" alt="" class="card-hero">
+                            {%else%}
+                            <img src="https://colorfully.eu/wp-content/uploads/2013/05/sweet-little-dog-facebook-c.jpg"
+                                alt="Image for {{ org.name }}" class="card-hero">
+                            {%endif%}
+                        </div>
+                        <div class="card-contents">
+                            <a href="/organizations/details/{{ org.id }}" class="card-link">
+                                {% if org.photos|length != 0 %}
+                                <img src="{{ org.photos[0].medium }}" alt="Image for {{ org.name }}" class="card-image">
+                                {%else%}
+                                <img src="https://img.freepik.com/free-vector/cute-dog-sitting-cartoon-vector-icon-illustration-animal-nature-icon-concept-isolated-premium-vector-flat-cartoon-style_138676-3671.jpg"
+                                    alt="Image for {{ org.name }}" class="card-image">
+
+                                {%endif%}
+                                <p>{{ org.name }}</p>
+                            </a>
+                        </div>
+
+                        {% if org.mission_statement %}
+                        <p class="card-bio">{{org.mission_statement}}</p>
+                        {%endif%}
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
