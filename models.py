@@ -75,7 +75,7 @@ class SavedOrgs(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    username = db.Column(db.Text, db.ForeignKey("users.username", ondelete="cascade"))
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="cascade"))
 
     org_id = db.Column(db.Text, db.ForeignKey("organizations.id", ondelete="cascade"))
     
@@ -86,7 +86,7 @@ class SavedAnimals(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    username = db.Column(db.Text, db.ForeignKey("users.username", ondelete="cascade"))
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="cascade"))
 
     animal_id = db.Column(db.Text, db.ForeignKey("animals.id", ondelete="cascade"))   
 

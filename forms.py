@@ -1,12 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, TextAreaField
+from wtforms import StringField, PasswordField
 from wtforms.validators import DataRequired, Email, Length
 
-
-class MessageForm(FlaskForm):
-    """Form for adding/editing messages."""
-
-    text = TextAreaField("text", validators=[DataRequired()])
 
 
 class UserAddForm(FlaskForm):

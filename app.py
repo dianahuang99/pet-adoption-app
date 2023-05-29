@@ -7,8 +7,11 @@ from numpy import nanmax
 from sqlalchemy.exc import IntegrityError
 from sympy import preview
 from time import sleep
+from threading import Timer
+from datetime import datetime, timedelta
 
-from forms import UserAddForm, LoginForm, MessageForm, EditUserForm
+
+from forms import UserAddForm, LoginForm, EditUserForm
 from models import db, connect_db, User, Organization, SavedOrgs, Animal, SavedAnimals
 import requests
 
@@ -27,6 +30,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ECHO"] = False
 app.config["DEBUG_TB_INTERCEPT_REDIRECTS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "it's a secret")
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+
 toolbar = DebugToolbarExtension(app)
 
 connect_db(app)
@@ -100,6 +105,27 @@ token_request = {
     "client_secret": "3IziiMSRjQiLrniOuKOKXi1VPQ8zRd7hqxEU69eh",
 }
 
+def getToken():
+    res = requests.post(
+                "https://api.petfinder.com/v2/oauth2/token", json=token_request
+            )
+    session["token"] = res.json()["access_token"]
+    session["timer"] = 3600
+    
+def setTimerToZero():
+    session['timer'] = 0
+    
+    # Example implementation of retrieve_token_expiration_time function
+def retrieve_token_expiration_time():
+    expiration_time = session.get('token_expiration_time')
+    return expiration_time
+    
+def token_expired():
+    expiration_time = retrieve_token_expiration_time()
+    current_time = datetime.now()
+    return current_time > expiration_time
+
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -113,10 +139,9 @@ def login():
         if user:
             do_login(user)
             flash(f"Hello, {user.username}!", "success")
-            res = requests.post(
-                "https://api.petfinder.com/v2/oauth2/token", json=token_request
-            )
-            session["token"] = res.json()["access_token"]
+            getToken()
+            t = Timer(3600.0, setTimerToZero)
+            t.start()
             return redirect("/")
 
         flash("Invalid credentials.", "danger")
@@ -139,22 +164,6 @@ def logout():
 # General user routes:
 
 
-@app.route("/users")
-def list_users():
-    """Page with listing of users.
-
-    Can take a 'q' param in querystring to search by that username.
-    """
-
-    search = request.args.get("q")
-
-    if not search:
-        users = User.query.all()
-    else:
-        users = User.query.filter(User.username.like(f"%{search}%")).all()
-
-    return render_template("users/index.html", users=users)
-
 
 @app.route("/users/<int:user_id>")
 def users_show(user_id):
@@ -164,49 +173,6 @@ def users_show(user_id):
 
     
     return render_template("users/show.html", user=user)
-
-
-
-@app.route("/users/<int:user_id>/followers")
-def users_followers(user_id):
-    """Show list of followers of this user."""
-
-    if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
-
-    user = User.query.get_or_404(user_id)
-    return render_template("users/followers.html", user=user)
-
-
-@app.route("/users/follow/<int:follow_id>", methods=["POST"])
-def add_follow(follow_id):
-    """Add a follow for the currently-logged-in user."""
-
-    if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
-
-    followed_user = User.query.get_or_404(follow_id)
-    g.user.following.append(followed_user)
-    db.session.commit()
-
-    return redirect(f"/users/{g.user.id}/following")
-
-
-@app.route("/users/stop-following/<int:follow_id>", methods=["POST"])
-def stop_following(follow_id):
-    """Have currently-logged-in-user stop following this user."""
-
-    if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
-
-    followed_user = User.query.get(follow_id)
-    g.user.following.remove(followed_user)
-    db.session.commit()
-
-    return redirect(f"/users/{g.user.id}/following")
 
 
 @app.route("/users/profile", methods=["GET", "POST"])
@@ -244,94 +210,11 @@ def delete_user():
 
     return redirect("/signup")
 
-
-##############################################################################
-# Messages routes:
-
-
-@app.route("/messages/new", methods=["GET", "POST"])
-def messages_add():
-    """Add a message:
-
-    Show form if GET. If valid, update message and redirect to user page.
-    """
-
-    if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
-
-    form = MessageForm()
-
-    if form.validate_on_submit():
-        msg = Message(text=form.text.data)
-        g.user.messages.append(msg)
-        db.session.commit()
-
-        return redirect(f"/users/{g.user.id}")
-
-    return render_template("messages/new.html", form=form)
-
-
-@app.route("/messages/<int:message_id>", methods=["GET"])
-def messages_show(message_id):
-    """Show a message."""
-
-    msg = Message.query.get(message_id)
-    return render_template("messages/show.html", message=msg)
-
-
-@app.route("/messages/<int:message_id>/delete", methods=["POST"])
-def messages_destroy(message_id):
-    """Delete a message."""
-
-    if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
-
-    msg = Message.query.get(message_id)
-    db.session.delete(msg)
-    db.session.commit()
-
-    return redirect(f"/users/{g.user.id}")
-
-
-##############################################################################
-# Likes
-@app.route("/users/add_like/<int:msg_id>", methods=["POST"])
-def add_like(msg_id):
-    if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect("/")
-
-    liked_message = Message.query.get_or_404(msg_id)
-    if liked_message.user_id == g.user.id:
-        return abort(403)
-
-    user_likes = g.user.likes
-
-    if liked_message in user_likes:
-        g.user.likes = [like for like in user_likes if like != liked_message]
-    else:
-        g.user.likes.append(liked_message)
-    db.session.commit()
-    return redirect("/")
-
-#not used
-@app.route("/users/<int:user_id>/likes")
-def show_liked_posts(user_id):
-
-    user = User.query.get_or_404(user_id)
-    likes = [like.message_id for like in Likes.query.filter_by(user_id=g.user.id).all()]
-
-    return render_template(
-        "/messages/liked_messages.html", messages=user.likes, likes=likes, user=user
-    )
-
 @app.route("/users/<int:user_id>/organizations")
 def show_liked_orgs(user_id):
 
     user = User.query.get_or_404(user_id)
-    org_likes = [saved_org.org_id for saved_org in SavedOrgs.query.filter_by(username=g.user.username).all()]
+    org_likes = [saved_org.org_id for saved_org in SavedOrgs.query.filter_by(user_id=g.user.id).all()]
 
     return render_template(
         "/organizations/liked_organizations.html", orgs=user.org_likes, org_likes=org_likes, user=user
@@ -341,47 +224,11 @@ def show_liked_orgs(user_id):
 def show_liked_animals(user_id):
 
     user = User.query.get_or_404(user_id)
-    animal_likes = [saved_animal.animal_id for saved_animal in SavedAnimals.query.filter_by(username=g.user.username).all()]
+    animal_likes = [saved_animal.animal_id for saved_animal in SavedAnimals.query.filter_by(user_id=g.user.id).all()]
 
     return render_template(
         "/animals/liked_animals.html", animals=user.animal_likes, animal_likes=animal_likes, user=user
     )
-
-
-# @app.route("/users/<int:user_id>/likes", ["POST"])
-# def show_liked_posts(user_id):
-
-#     user = User.query.get(user_id)
-
-#     likes = [like.message_id for like in Likes.query.filter_by(user_id=user_id).all()]
-
-#     return render_template(
-#         "/messages/liked_messages.html", messages=user.likes, likes=likes
-#     )
-
-
-@app.route("/users/add_like_v2/<int:msg_id>", methods=["POST"])
-def add_like_v2(msg_id):
-    if not g.user:
-        flash("Access unauthorized.", "danger")
-        return redirect(f"/users/{g.user.id}/likes")
-
-    liked_message = Message.query.get_or_404(msg_id)
-    if liked_message.user_id == g.user.id:
-        return abort(403)
-
-    user_likes = g.user.likes
-
-    if liked_message in user_likes:
-        g.user.likes = [like for like in user_likes if like != liked_message]
-    else:
-        g.user.likes.append(liked_message)
-    db.session.commit()
-    return redirect(f"/users/{g.user.id}/likes")
-
-
-####################### start of project
-
 
 @app.route("/organizations/<int:page_num>")
 def list_organizations(page_num):
@@ -389,9 +236,6 @@ def list_organizations(page_num):
 
     Can take a 'q' param in querystring to search by that username.
     """
-
-    print('THIS IS MY SESSION TOKENNNNN!!!!!!!!!!!!!!!!!!!!')
-    print(session["token"])
     
     location = request.args.get("location")
     state = request.args.get("state")
@@ -478,10 +322,7 @@ def list_animals(page_num):
         data = res.json()
         animals = data["animals"]
 
-        
-        
-        # for animal in animals:
-        #     print(animal["name"])
+    
     if type:
         res = requests.get(
             f"https://api.petfinder.com/v2/animals?page={page_num}&limit=42&type={type}",
@@ -562,32 +403,6 @@ def organization_details(org_id):
 
     return render_template("organizations/details.html", org=organization)
 
-
-@app.route("/organizations/search")
-def search_for_organizations():
-    """Search for organizations."""
-    if not g.user:
-        flash("Please login first!", "danger")
-        return redirect("/login")
-    else:
-        search_for = request.args.get("search_for").strip()
-        if len(search_for) < 2:
-            flash("Please enter at least 2 characters to search!", "danger")
-            return redirect("/organizations/1")
-        else:
-            small_images = find_some_art(search_for)
-            if session["return"] == "success":
-                user = User.query.get(session["username"])
-                return render_template(
-                    "found_artworks.html",
-                    art=small_images,
-                    search_for=search_for,
-                    user=user,
-                )
-            else:
-                return redirect("/artwork/add")
-
-
 @app.route("/animal/save/<animal_id>", methods=["POST"])
 def add_to_saved_animals(animal_id):
     """add to saved animals."""
@@ -607,7 +422,7 @@ def add_to_saved_animals(animal_id):
             )
             db.session.add(new_animal)
             db.session.commit()
-            new_user_animal = SavedAnimals(username=g.user.username, animal_id=animal_id)
+            new_user_animal = SavedAnimals(user_id=g.user.id, animal_id=animal_id)
             db.session.add(new_user_animal)
             db.session.commit()
         else:
@@ -618,8 +433,6 @@ def add_to_saved_animals(animal_id):
                 g.user.animal_likes = [animal for animal in animal_likes if animal != liked_animal]
             else:
                 g.user.animal_likes.append(liked_animal)
-                # new_user_org = SavedOrgs(username=g.user.username, org_id=org_id)
-                # db.session.add(new_user_org)
             db.session.commit()
         
         return redirect(request.referrer)
@@ -643,7 +456,7 @@ def add_to_saved_orgs(org_id):
             )
             db.session.add(new_org)
             db.session.commit()
-            new_user_org = SavedOrgs(username=g.user.username, org_id=org_id)
+            new_user_org = SavedOrgs(user_id=g.user.id, org_id=org_id)
             db.session.add(new_user_org)
             db.session.commit()
         else:
@@ -654,62 +467,13 @@ def add_to_saved_orgs(org_id):
                 g.user.org_likes = [org for org in org_likes if org != liked_org]
             else:
                 g.user.org_likes.append(liked_org)
-                # new_user_org = SavedOrgs(username=g.user.username, org_id=org_id)
-                # db.session.add(new_user_org)
             db.session.commit()
         return redirect(request.referrer)
 
 
-@app.route("/artwork/addtocollection/<int:org_id>")
-def add_to_collection(org_id):
-    """add to collection."""
-    if "username" not in session:
-        flash("Please login first!", "danger")
-        return redirect("/login")
-    else:
-        org = Organization.query.get(org_id)
-        if org == None:
-            title = session["title"]
-            artist = session["artist"]
-            department = session["department"]
-            creditline = session["creditLine"]
-            image = session["image_link"]
-            image_full = session["image_link_full"]
-            if image == "":
-                image = "https://images.metmuseum.org/CRDImages/eg/web-large/Images-Restricted.jpg"
-            if image_full == "":
-                image_full = "https://images.metmuseum.org/CRDImages/eg/web-large/Images-Restricted.jpg"
-            new_art = Artwork(
-                id=artwork_id,
-                title=title,
-                artist=artist,
-                department=department,
-                creditline=creditline,
-                image_link=image,
-                image_link_full=image_full,
-            )
-            db.session.add(new_art)
-            db.session.commit()
-            new_user_art = UserArtwork(
-                username=session["username"], artwork_id=artwork_id
-            )
-            db.session.add(new_user_art)
-            db.session.commit()
-        else:
-            user_art = UserArtwork.query.filter_by(
-                username=session["username"], artwork_id=artwork_id
-            ).first()
-            if user_art == None:
-                new_user_art = UserArtwork(
-                    username=session["username"], artwork_id=artwork_id
-                )
-                db.session.add(new_user_art)
-                db.session.commit()
-        return redirect(f"/user/{session['username']}")
-
 
 def get_the_org(org_id):
-    """get the details for a work of art when we are not sure if the art id is valid"""
+    """get the details for an organizationn"""
     org = Organization.query.get(
         org_id
     )  # see if we have it in the db and if not call the api
@@ -736,12 +500,7 @@ def get_the_org(org_id):
                 org['img_url'] = 'https://img.freepik.com/free-vector/cute-dog-sitting-cartoon-vector-icon-illustration-animal-nature-icon-concept-isolated-premium-vector-flat-cartoon-style_138676-3671.jpg'
             else:
                 org['img_url'] = j_org["photos"][0]["medium"]
-            print(org)
            
-                
-            print("++++++++++++++++++++++++++++++++++++")
-            print(org)
-            print("+++++++++++++++++++++++++++++++++")
             return org
         except Exception as e:
             flash("An unexpected error occurred.", "danger")
@@ -766,8 +525,6 @@ def get_the_animal(animal_id):
             )
             data = get_animal.json()
             j_animal = data["animal"]
-            # print(j_animal)
-          
             animal = {
                 "id": animal_id,
                 "name": j_animal["name"],
@@ -778,12 +535,6 @@ def get_the_animal(animal_id):
                 animal['img_url'] = 'https://img.freepik.com/free-vector/cute-dog-sitting-cartoon-vector-icon-illustration-animal-nature-icon-concept-isolated-premium-vector-flat-cartoon-style_138676-3671.jpg'
             else:
                 animal['img_url'] = j_animal["photos"][0]["medium"]
-            # print(animal)
-            
-           
-            # print("++++++++++++++++++++++++++++++++++++")
-            # print(animal)
-            # print("+++++++++++++++++++++++++++++++++")
             return animal
         except Exception as e:
             flash("An unexpected error occurred.", "danger")
@@ -810,68 +561,6 @@ def homepage():
 
     else:
         return render_template("home-anon.html")
-
-
-########################################################
-def find_some_org(search_for):
-    """Call the api with the search term"""
-    res = requests.get(
-        f"https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q={search_for}"
-    )
-    data = res.json()
-    if data["total"] == 0:
-        flash(
-            "No artworks were found for that search! Please try again with a different search term.",
-            "danger",
-        )
-        session["return"] = "failed"
-        return
-    else:
-        small_images = find_the_images(data)
-    session["return"] = "success"
-    return small_images
-
-
-def get_the_art(artwork_id):
-    """get the details for a work of art when we are not sure if the art id is valid"""
-    art = Artwork.query.get(
-        artwork_id
-    )  # see if we have it in the db and if not call the api
-    if art == None:
-        try:
-            get_art = requests.get(
-                f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{artwork_id}"
-            )
-            j_org = get_art.json()
-            if j_org["primaryImageSmall"] == "":
-                j_org[
-                    "primaryImageSmall"
-                ] = "https://images.metmuseum.org/CRDImages/eg/web-large/Images-Restricted.jpg"
-            if j_org["primaryImage"] == "":
-                j_org[
-                    "primaryImage"
-                ] = "https://images.metmuseum.org/CRDImages/eg/web-large/Images-Restricted.jpg"
-            session["title"] = j_org["title"]
-            session["artist"] = j_org["artistDisplayName"]
-            session["department"] = j_org["department"]
-            session["creditLine"] = j_org["creditLine"]
-            session["image_link"] = j_org["primaryImageSmall"]
-            session["image_link_full"] = j_org["primaryImage"]
-            art = Artwork(
-                id=artwork_id,
-                title=j_org["title"],
-                artist=j_org["artistDisplayName"],
-                department=j_org["department"],
-                creditline=j_org["creditLine"],
-                image_link=j_org["primaryImageSmall"],
-                image_link_full=j_org["primaryImage"],
-            )
-        except Exception as e:
-            flash("An unexpected error occurred.", "danger")
-            session["return"] = "failed"
-            return
-    session["return"] = "success"
-    return art
 
 
 ##############################################################################
