@@ -9,12 +9,11 @@ from sympy import preview
 from time import sleep
 from threading import Timer
 from datetime import datetime, timedelta
-
+import html
 
 from forms import UserAddForm, LoginForm, EditUserForm
 from models import db, connect_db, User, Organization, SavedOrgs, Animal, SavedAnimals
 import requests
-
 
 CURR_USER_KEY = "curr_user"
 
@@ -30,11 +29,69 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ECHO"] = False
 app.config["DEBUG_TB_INTERCEPT_REDIRECTS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "it's a secret")
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=60)
 
 toolbar = DebugToolbarExtension(app)
 
 connect_db(app)
+
+
+
+
+###########################################
+#global variables for api
+BASE_URL = "https://api.petfinder.com/v2"
+
+#api functions
+def retrieve_new_token():
+    # Implement the logic to retrieve a new OAuth token from your authentication provider
+    # Return the new token as a string
+    # TODO: Implement the token retrieval logic in your application
+    res = requests.post(
+                "https://api.petfinder.com/v2/oauth2/token", json=token_request
+            )
+    # session["token"] = res.json()["access_token"]
+    return res.json()["access_token"]
+
+# Example implementation of token_expired function
+def token_expired():
+    expiration_time = retrieve_token_expiration_time()
+    current_time = datetime.now()
+    return current_time > expiration_time
+
+# Example implementation of retrieve_token_expiration_time function
+def retrieve_token_expiration_time():
+    expiration_time = session.get('token_expiration_time')
+    return expiration_time
+
+# Function to refresh the token
+def refresh_token():
+    new_token = retrieve_new_token()
+    session['oauth_token'] = new_token
+    expiration_time = datetime.now() + timedelta(minutes=60)  # Set the new token expiration time (e.g., 30 minutes from now)
+    session['token_expiration_time'] = expiration_time
+
+# Function to make an API request with token refresh
+def make_api_request(url, method='GET', headers=None, params=None, data=None):
+    if 'oauth_token' not in session:
+        # No token in session, retrieve a new one
+        new_token = retrieve_new_token()
+        session['oauth_token'] = new_token
+        expiration_time = datetime.now() + timedelta(minutes=60)
+        session['token_expiration_time'] = expiration_time
+    elif token_expired():
+        # Token has expired, refresh it
+        refresh_token()
+
+    # Construct the request headers
+    request_headers = {'Authorization': f'Bearer {session["oauth_token"]}'} if headers is None else headers
+
+    # Make the API request
+    response = requests.request(method, url, headers=request_headers, params=params, data=data)
+
+    # Return the API response
+    return response
+
 
 ##############################################################################
 # User signup/login/logout
@@ -105,26 +162,6 @@ token_request = {
     "client_secret": "3IziiMSRjQiLrniOuKOKXi1VPQ8zRd7hqxEU69eh",
 }
 
-def getToken():
-    res = requests.post(
-                "https://api.petfinder.com/v2/oauth2/token", json=token_request
-            )
-    session["token"] = res.json()["access_token"]
-    session["timer"] = 3600
-    
-def setTimerToZero():
-    session['timer'] = 0
-    
-    # Example implementation of retrieve_token_expiration_time function
-def retrieve_token_expiration_time():
-    expiration_time = session.get('token_expiration_time')
-    return expiration_time
-    
-def token_expired():
-    expiration_time = retrieve_token_expiration_time()
-    current_time = datetime.now()
-    return current_time > expiration_time
-
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -139,9 +176,6 @@ def login():
         if user:
             do_login(user)
             flash(f"Hello, {user.username}!", "success")
-            getToken()
-            t = Timer(3600.0, setTimerToZero)
-            t.start()
             return redirect("/")
 
         flash("Invalid credentials.", "danger")
@@ -239,8 +273,6 @@ def list_organizations(page_num):
     
     location = request.args.get("location")
     state = request.args.get("state")
-    token = session["token"]
-    headers = {"Authorization": f"Bearer {token}"}
     
     states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
           "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
@@ -248,47 +280,24 @@ def list_organizations(page_num):
           "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", 
           "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
 
-
-    if not location and not state:
-        res = requests.get(
-            f"https://api.petfinder.com/v2/organizations?page={page_num}&limit=42",
-            headers=headers,
-        )
-
-        data = res.json()
-        organizations = data["organizations"]
-        for org in organizations:
-            print("didn't search")
-            print(org["name"])
-    if location:
-        res = requests.get(
-            f"https://api.petfinder.com/v2/organizations?page={page_num}&limit=42&location={location}",
-            headers=headers,
-        )
-
-        data = res.json()
-        organizations = data["organizations"]
-        
-    if state:
-        res = requests.get(
-            f"https://api.petfinder.com/v2/organizations?page={page_num}&limit=42&state={state}",
-            headers=headers,
-        )
-
-        data = res.json()
-        organizations = data["organizations"]
-        for org in organizations:
-
-            print(org["name"])
-            print("searched")
+    params = {"page": page_num, "limit": 42}
     
-    org_likes = [saved_org.id for saved_org in g.user.org_likes]
+    if location:
+        params["location"] = location
 
+    if state:
+        params["state"] = state
+        
+    url = f"{BASE_URL}/organizations"
+    res = make_api_request(url, params=params)
+    data = res.json()
+    organizations = data["organizations"]
+
+    org_likes = [saved_org.id for saved_org in g.user.org_likes]
 
     return render_template(
         "organizations/index.html", organizations=organizations, page_num=page_num + 1, org_likes=org_likes, states=states, state=state, location=location
     )
-
 
 @app.route("/animals/<int:page_num>")
 def list_animals(page_num):
@@ -300,65 +309,32 @@ def list_animals(page_num):
     name = request.args.get("name")
     type = request.args.get("type")
     gender = request.args.get('gender')
-    token = session["token"]
-    headers = {"Authorization": f"Bearer {token}"}
     
+    url_types = f"{BASE_URL}/types"
+    response_types = make_api_request(url_types)
+    data = response_types.json()
+    types = data['types']
     
-    type_res = requests.get(
-            f"https://api.petfinder.com/v2/types",
-            headers=headers,
-        )
-
-    data = type_res.json()
-    types = data["types"]   
-    
-
-    if not type and not name and not gender:
-        res = requests.get(
-            f"https://api.petfinder.com/v2/animals?page={page_num}&limit=42",
-            headers=headers,
-        )
-
-        data = res.json()
-        animals = data["animals"]
-
+    params = {"page": page_num, "limit": 42}
     
     if type:
-        res = requests.get(
-            f"https://api.petfinder.com/v2/animals?page={page_num}&limit=42&type={type}",
-            headers=headers,
-        )
-
-        data = res.json()
-        if('animals' in data):
-            animals = data["animals"]
-        else:   
-            animals = []
+        params["type"] = type
         
     if name:
-        res = requests.get(
-            f"https://api.petfinder.com/v2/animals?page={page_num}&limit=42&name={name}",
-            headers=headers,
-        )
-
-        data = res.json()
-        animals = data["animals"]
+        params["name"] = name
         
     if gender:
-        res = requests.get(
-            f"https://api.petfinder.com/v2/animals?page={page_num}&limit=42&gender={gender}",
-            headers=headers,
-        )
+        params["gender"] = gender
 
-        data = res.json()
-        animals = data["animals"]
+    url_animals = f"{BASE_URL}/animals"
+    response_animals = make_api_request(url_animals, params=params)
+    data = response_animals.json()
+    animals = data['animals']
     
-    
-        
     animal_likes = [int(saved_animal.id) for saved_animal in g.user.animal_likes]
 
-    return render_template("animals/index.html", animals=animals, page_num=page_num + 1, animal_likes=animal_likes, name=name, types=types, type=type, gender=gender)
-
+    return render_template("animals/index.html", animals=animals, page_num=page_num + 1, animal_likes=animal_likes, name=name, types=types, type=type, gender=gender, html=html)
+    
 
 @app.route("/animals/details/<int:animal_id>")
 def animal_details(animal_id):
@@ -366,18 +342,15 @@ def animal_details(animal_id):
 
     Can take a 'q' param in querystring to search by that username.
     """
-
+    
     search = request.args.get("q")
-    token = session["token"]
+    
+    url = f"{BASE_URL}/animals/{animal_id}"
 
     if not search:
-        headers = {"Authorization": f"Bearer {token}"}
-        res = requests.get(
-            f"https://api.petfinder.com/v2/animals/{animal_id}", headers=headers,
-        )
-
+        res = make_api_request(url)
         data = res.json()
-        animal = data["animal"]
+        animal = data['animal']
 
     return render_template("animals/details.html", animal=animal)
 
@@ -390,16 +363,13 @@ def organization_details(org_id):
     """
 
     search = request.args.get("q")
-    token = session["token"]
+    
+    url = f"{BASE_URL}/organizations/{org_id}"
 
     if not search:
-        headers = {"Authorization": f"Bearer {token}"}
-        res = requests.get(
-            f"https://api.petfinder.com/v2/organizations/{org_id}", headers=headers,
-        )
-
+        res = make_api_request(url)
         data = res.json()
-        organization = data["organization"]
+        organization = data['organization']
 
     return render_template("organizations/details.html", org=organization)
 
@@ -478,17 +448,12 @@ def get_the_org(org_id):
         org_id
     )  # see if we have it in the db and if not call the api
 
-    if org == None:
+    if org is None:
         try:
-
-            token = session["token"]
-            headers = {"Authorization": f"Bearer {token}"}
-            get_org = requests.get(
-                f"https://api.petfinder.com/v2/organizations/{org_id}", headers=headers
-            )
-            data = get_org.json()
-            j_org = data["organization"]
-            print(j_org)
+            url = f"{BASE_URL}/organizations/{org_id}"
+            res = make_api_request(url)
+            data = res.json()
+            j_org = data['organization']
           
             org = {
                 "id": org_id,
@@ -517,14 +482,11 @@ def get_the_animal(animal_id):
 
     if animal == None:
         try:
-
-            token = session["token"]
-            headers = {"Authorization": f"Bearer {token}"}
-            get_animal = requests.get(
-                f"https://api.petfinder.com/v2/animals/{animal_id}", headers=headers
-            )
-            data = get_animal.json()
-            j_animal = data["animal"]
+            url = f"{BASE_URL}/animals/{animal_id}"
+            res = make_api_request(url)
+            data = res.json()
+            j_animal = data['animal']
+            
             animal = {
                 "id": animal_id,
                 "name": j_animal["name"],
